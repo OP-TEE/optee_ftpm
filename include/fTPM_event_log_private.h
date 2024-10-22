@@ -40,7 +40,6 @@
  * Section 4.40 of Trusted Platform Module Library. Part 1.
  * Level 00 Revision 01.38. September 29, 2016.
  */
-#define TPM_RS_PW               0x40000009
 #define AUTH_SIZE               0x00000009
 
 #define TPM_PCR_EXTEND          0x00000182
