@@ -62,6 +62,7 @@
 //
 #define TA_ALL_PARAM_TYPE(a) TEE_PARAM_TYPES((a), (a), (a), (a))
 
+#ifndef BYTE_ARRAY_TO_UINT32
 //
 // Used to extract size field from TPM command buffers
 //
@@ -69,6 +70,8 @@
                                             + ((b)[1] << 16) \
                                             + ((b)[2] << 8 ) \
                                             +  (b)[3])
+#endif
+
 //
 // Entrypoint for reference implemntation
 //
