@@ -15,6 +15,8 @@
 #include <fTPM_helpers.h>
 #include <fTPM_event_log.h>
 #include <fTPM_event_log_private.h>
+#include <stdlib.h>
+#include <string.h>
 
 /*
  * Global variables.
