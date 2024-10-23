@@ -6,3 +6,9 @@ ifeq ($(wildcard $(TA_DEV_KIT_DIR)/mk/ta_dev_kit.mk), )
 clean:
 	@echo 'Note: $$(TA_DEV_KIT_DIR)/mk/ta_dev_kit.mk not found, cannot clean TA'
 endif
+
+ifeq ($(wildcard $(CFG_MS_TPM_20_REF)),)
+ifneq ($(MAKECMDGOALS),clean)
+$(error CFG_MS_TPM_20_REF not supplied or invalid)
+endif
+endif
