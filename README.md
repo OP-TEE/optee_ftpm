@@ -13,6 +13,16 @@ implementation](https://github.com/microsoft/ms-tpm-20-ref) sample
 [ARM32-FirmwareTPM](https://github.com/microsoft/ms-tpm-20-ref/tree/Historical_Samples/Samples/ARM32-FirmwareTPM)
 maintained to work with OP-TEE.
 
+## Building the TA
+
+This TA is built as described in [Trusted
+Applications](https://optee.readthedocs.io/en/latest/building/trusted_applications.html)
+section in the [OP-TEE
+documentation](https://optee.readthedocs.io/en/latest/index.html) with the
+addition of `CFG_MS_TPM_20_REF` which must hold the path to a checked out
+copy of the [MS TPM 2.0 Reference
+Implementation](https://github.com/microsoft/ms-tpm-20-ref).
+
 ## Measured Boot support
 The fTPM Trusted Application includes support for Measured Boot. This
 feature allows the TA to read a TPM Event Log compatible with the
