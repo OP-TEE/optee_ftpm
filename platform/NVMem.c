@@ -157,7 +157,7 @@ _plat__NvInitFromStorage()
 		objID = s_StorageObjectID + i;
 
 		// Attempt to open TEE persistent storage object.
-		Result = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE,
+		Result = TEE_OpenPersistentObject(CFG_FTPM_TA_TEE_STORAGE_ID,
 									      (void *)&objID,
 									      sizeof(objID),
 									      TA_STORAGE_FLAGS,
@@ -175,7 +175,7 @@ _plat__NvInitFromStorage()
 			}
 
 			// Storage object was not found, create it.
-			Result = TEE_CreatePersistentObject(TEE_STORAGE_PRIVATE,
+			Result = TEE_CreatePersistentObject(CFG_FTPM_TA_TEE_STORAGE_ID,
 										        (void *)&objID,
 										        sizeof(objID),
 										        TA_STORAGE_FLAGS,
@@ -313,7 +313,7 @@ _plat__NvWriteBack()
 			// Force storage stack to update its backing store
             TEE_CloseObject(s_NVStore[i]);
 
-            Result = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE,
+            Result = TEE_OpenPersistentObject(CFG_FTPM_TA_TEE_STORAGE_ID,
                                               (void *)&objID,
                                               sizeof(objID),
                                               TA_STORAGE_FLAGS,
