@@ -226,6 +226,10 @@ _plat__NvInitFromStorage()
 				i, bytesRead, objID, s_NVStore[i]);
 #endif
 		}
+
+		/* Close object now, it will be opened back upon update */
+		TEE_CloseObject(s_NVStore[i]);
+		s_NVStore[i] = TEE_HANDLE_NULL;
 	}
 
 	// Storage objects are open and valid, next validate revision
@@ -296,8 +300,12 @@ _plat__NvWriteBack()
 			// Form storage object ID for this block.
 			objID = s_StorageObjectID + i;
 
-			// Move data position associated with handle to start of block.
-            Result = TEE_SeekObjectData(s_NVStore[i], 0, TEE_DATA_SEEK_SET);
+			/* Open TEE persistent storage object: shall not fail */
+			Result = TEE_OpenPersistentObject(CFG_FTPM_TA_TEE_STORAGE_ID,
+							  (void *)&objID,
+							  sizeof(objID),
+							  TA_STORAGE_FLAGS,
+							  &s_NVStore[i]);
 			if (Result != TEE_SUCCESS) {
 				goto Error;
 			}
@@ -310,18 +318,12 @@ _plat__NvWriteBack()
 				goto Error;
 			}
 
-			// Force storage stack to update its backing store
-            TEE_CloseObject(s_NVStore[i]);
-
-            Result = TEE_OpenPersistentObject(CFG_FTPM_TA_TEE_STORAGE_ID,
-                                              (void *)&objID,
-                                              sizeof(objID),
-                                              TA_STORAGE_FLAGS,
-                                              &s_NVStore[i]);
-			// Success?
-			if (Result != TEE_SUCCESS) {
-				goto Error;
-			}
+			/*
+			 * Close file to not waste secure resource in
+			 * the dear TEE.
+			 */
+			TEE_CloseObject(s_NVStore[i]);
+			s_NVStore[i] = TEE_HANDLE_NULL;
 
 			// Clear dirty bit.
             s_blockMap &= ~(0x1ULL << i);
