@@ -1,4 +1,5 @@
 CFG_FTPM_EMULATE_PPI ?= n
+CFG_FTPM_TA_TEE_STORAGE_ID ?= TEE_STORAGE_PRIVATE
 
 #
 # The fTPM needs to overwrite some of the header files used in the
@@ -76,6 +77,8 @@ cflags-platform/fTPM_event_log.c-y += -Wno-incompatible-pointer-types
 cflags-platform/EventLogPrint.c-y += -Wno-pointer-arith
 cflags-platform/EventLogPrint.c-y += -Wno-format-truncation
 cflags-platform/EventLogPrint.c-y += -Wno-restrict
+
+cppflags-y += -DCFG_FTPM_TA_TEE_STORAGE_ID=$(CFG_FTPM_TA_TEE_STORAGE_ID)
 
 srcs-y += platform/AdminPPI.c
 srcs-y += platform/Cancel.c
