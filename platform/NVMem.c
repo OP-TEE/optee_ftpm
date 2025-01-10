@@ -133,7 +133,7 @@ _plat__NvInitFromStorage()
 	UINT32 i;
 	BOOL initialized;
 	UINT32 objID;
-	UINT32 bytesRead;
+	size_t bytesRead;
 	TEE_Result Result;
 
 	// Don't re-initialize.
