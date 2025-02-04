@@ -1,0 +1,40 @@
+name: CI
+on: [push, pull_request]
+permissions:
+  contents: read # to fetch code (actions/checkout)
+jobs:
+  QEMUv8_check1:
+    name: make check (QEMUv8)
+    runs-on: ubuntu-latest
+    container: jforissier/optee_os_ci:qemu_check
+    steps:
+      - name: Remove /__t/*
+        run: rm -rf /__t/*
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: /github/home/.cache/ccache
+          key: qemuv8_check-cache-${{ github.sha }}
+          restore-keys: |
+            qemuv8_check-cache-
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Update Git config
+        run: git config --global --add safe.directory ${GITHUB_WORKSPACE}
+      - shell: bash
+        run: |
+          # make check task
+          set -e -v
+          export LC_ALL=C
+          export BR2_CCACHE_DIR=/github/home/.cache/ccache
+          export FORCE_UNSAFE_CONFIGURE=1 # Prevent Buildroot error when building as root
+          export CFG_TEE_CORE_LOG_LEVEL=0
+          OPTEE_FTPM_TO_TEST=$(pwd)
+          cd ..
+          TOP=$(pwd)/optee_repo_qemu_v8
+          /root/get_optee.sh qemu_v8 ${TOP}
+          mv ${TOP}/optee_ftpm ${TOP}/optee_ftpm_old
+          ln -s ${OPTEE_FTPM_TO_TEST} ${TOP}/optee_ftpm
+          cd ${TOP}/build
+
+          make -j$(nproc) check MEASURED_BOOT_FTPM=y CHECK_TEST=xtest XTEST_ARGS=regression_1041
