@@ -22,6 +22,8 @@ documentation](https://optee.readthedocs.io/en/latest/index.html) with the
 addition of `CFG_MS_TPM_20_REF` which must hold the path to a checked out
 copy of the [MS TPM 2.0 Reference
 Implementation](https://github.com/microsoft/ms-tpm-20-ref).
+You need to checkout commit (98b60a44aba79b15fcce1c0d1e46cf5918400f6a) of [MS TPM 2.0 Reference
+Implementation](https://github.com/microsoft/ms-tpm-20-ref)
 
 ## Measured Boot support
 The fTPM Trusted Application includes support for Measured Boot. This
