@@ -37,4 +37,4 @@ jobs:
           ln -s ${OPTEE_FTPM_TO_TEST} ${TOP}/optee_ftpm
           cd ${TOP}/build
 
-          make -j$(nproc) check MEASURED_BOOT_FTPM=y CHECK_TEST=xtest XTEST_ARGS=regression_1041
+          make -j$(nproc) check MEASURED_BOOT_FTPM=y CHECK_TESTS=xtest XTEST_ARGS=regression_1041
