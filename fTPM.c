@@ -154,7 +154,7 @@ TEE_Result TA_CreateEntryPoint(void)
     if (fTPMInitialized) {
         // We may have had TA_DestroyEntryPoint called but we didn't
         // actually get torn down. Re-NVEnable, just in case.
-        if (_plat__NVEnable(NULL) == 0) {
+        if (_plat__NVEnable(NULL)) {
             TEE_Panic(TEE_ERROR_BAD_STATE);
         }
         return TEE_SUCCESS;
@@ -164,7 +164,7 @@ TEE_Result TA_CreateEntryPoint(void)
     _admin__NvInitState();
 
     // If we fail to open fTPM storage we cannot continue.
-    if (_plat__NVEnable(NULL) == 0) {
+    if (_plat__NVEnable(NULL)) {
         TEE_Panic(TEE_ERROR_BAD_STATE);
     }
 

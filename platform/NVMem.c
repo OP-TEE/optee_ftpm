@@ -101,6 +101,14 @@ static UINT64 s_blockMap = 0x0ULL;
 #error "NV block count exceeds 64 bit block map. Adjust block or NV size."
 #endif
 
+/*
+ * Return codes for _plat__NvEnable. Private to this file only, because
+ * callers should NOT compare to the errors for equality.
+ */
+#define _plat__NvEnable_RC_FAIL_UNRECOVERABLE -1
+#define _plat__NvEnable_RC_SUCCESS            0
+#define _plat__NvEnable_RC_FAIL_RECOVERABLE   1
+
 //
 // NV state
 //
@@ -385,7 +393,7 @@ _plat__NVEnable(
 
     // Don't re-open the backing store.
     if (s_NVInitialized) {
-        return 0;
+        return _plat__NvEnable_RC_SUCCESS;
     }
 
 	// Clear NV
@@ -412,10 +420,10 @@ _plat__NVEnable(
             // should we decide not to just TEE_Panic, we can continue
             // execution after (re)manufacture. Later an attempt at re-init
             // can be made by calling _plat__NvInitFromStorage again.
-            retVal = 0;
+            retVal = _plat__NvEnable_RC_FAIL_RECOVERABLE;
         }
         else {
-            retVal = 1;
+            retVal = _plat__NvEnable_RC_SUCCESS;
         }
 
         // Going to manufacture, zero flags
@@ -440,7 +448,7 @@ _plat__NVEnable(
         _admin__RestoreChipFlags();
 
 		// Success
-		retVal = 1;
+        retVal = _plat__NvEnable_RC_SUCCESS;
     }
 
     return retVal;
