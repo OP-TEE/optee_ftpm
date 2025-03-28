@@ -1,3 +1,7 @@
+# As for now, fTPM implementation leads to too many build warnings for
+# OP-TEE configuration CFG_WERROR to be enable. Force it disabled.
+override CFG_WERROR := n
+
 CFG_FTPM_EMULATE_PPI ?= n
 CFG_FTPM_TA_TEE_STORAGE_ID ?= TEE_STORAGE_PRIVATE
 
