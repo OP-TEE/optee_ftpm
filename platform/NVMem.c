@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/*
+ * Copyright (c) 2026, Siemens AG
+ */
 /* Microsoft Reference Implementation for TPM 2.0
  *
  *  The copyright in this software is being made available under the BSD License,
@@ -39,12 +43,12 @@
 //    The implementation may become more sophisticated over time.
 //
 
-#include "TpmError.h"
 #include "Admin.h"
-#include "VendorString.h"
+#include <assert.h>
 #include "stdint.h"
 #include "malloc.h"
 #include "string.h"
+#include "prototypes/platform_public_interface.h"
 
 #include <tee_internal_api.h>
 #include <tee_internal_api_extensions.h>
@@ -115,12 +119,6 @@ static UINT64 s_blockMap = 0x0ULL;
 static BOOL  s_NVChipFileNeedsManufacture = FALSE;
 static BOOL  s_NVInitialized = FALSE;
 static UCHAR s_NV[NV_CHIP_MEMORY_SIZE];
-
-//
-// Firmware revision
-//
-static const UINT32 firmwareV1 = FIRMWARE_V1;
-static const UINT32 firmwareV2 = FIRMWARE_V2;
 
 //
 // Revision fro NVChip
@@ -241,7 +239,7 @@ _plat__NvInitFromStorage()
 	}
 
 	// Storage objects are open and valid, next validate revision
-	s_chipRevision = ((((UINT64)firmwareV2) << 32) | (firmwareV1));
+	s_chipRevision = ((((UINT64)_plat__GetTpmFirmwareVersionLow()) << 32) | (_plat__GetTpmFirmwareVersionHigh()));
 	if ((s_chipRevision != *(UINT64*)&(s_NV[NV_CHIP_REVISION_OFFSET]))) {
 
 		// Failure to validate revision, re-init.
@@ -251,7 +249,7 @@ _plat__NvInitFromStorage()
 		s_blockMap = NV_DIRTY_ALL;
 
 		// Init with proper revision
-		s_chipRevision = ((((UINT64)firmwareV2) << 32) | (firmwareV1));
+		s_chipRevision = ((((UINT64)_plat__GetTpmFirmwareVersionLow()) << 32) | (_plat__GetTpmFirmwareVersionHigh()));
 		*(UINT64*)&(s_NV[NV_CHIP_REVISION_OFFSET]) = s_chipRevision;
 
 #ifdef fTPMDebug
@@ -380,16 +378,16 @@ _plat__NvNeedsManufacture()
 //      <0          if unrecoverable error
 LIB_EXPORT int
 _plat__NVEnable(
-    void            *platParameter  // IN: platform specific parameters
+    void            *platParameter,  // IN: platform specific parameters
+    size_t          paramSize
 	)
 {
     UNREFERENCED_PARAMETER(platParameter);
+    UNREFERENCED_PARAMETER(paramSize);
 	DMSG("_plat__NVEnable()");
 
 
     UINT32 retVal = 0;
-    UINT32 firmwareV1 = FIRMWARE_V1;
-    UINT32 firmwareV2 = FIRMWARE_V2;
 
     // Don't re-open the backing store.
     if (s_NVInitialized) {
@@ -400,7 +398,7 @@ _plat__NVEnable(
     memset(s_NV, 0, NV_CHIP_MEMORY_SIZE);
 
     // Prepare for potential failure to retreieve NV from storage
-    s_chipRevision = ((((UINT64)firmwareV2) << 32) | (firmwareV1));
+    s_chipRevision = ((((UINT64)_plat__GetTpmFirmwareVersionLow()) << 32) | (_plat__GetTpmFirmwareVersionHigh()));
     *(UINT64*)&(s_NV[NV_CHIP_REVISION_OFFSET]) = s_chipRevision;
 
     // Pick up our NV memory.
@@ -458,10 +456,14 @@ _plat__NVEnable(
 // Disable NV memory
 LIB_EXPORT void
 _plat__NVDisable(
-    void
+    void            *platParameter,
+    size_t          paramSize
     )
 {
 	UINT32 i;
+
+    UNREFERENCED_PARAMETER(platParameter);
+    UNREFERENCED_PARAMETER(paramSize);
 
     if (!s_NVInitialized) {
         return;
@@ -491,7 +493,7 @@ _plat__NVDisable(
 //      1               NV is not available due to write failure
 //      2               NV is not available due to rate limit
 LIB_EXPORT int
-_plat__IsNvAvailable(
+_plat__GetNvReadyState(
     void
     )
 {
@@ -503,7 +505,7 @@ _plat__IsNvAvailable(
 
 //***_plat__NvMemoryRead()
 // Function: Read a chunk of NV memory
-LIB_EXPORT void
+LIB_EXPORT int
 _plat__NvMemoryRead(
     unsigned int     startOffset,   // IN: read start
     unsigned int     size,          // IN: size of bytes to read
@@ -514,22 +516,30 @@ _plat__NvMemoryRead(
     pAssert(s_NV != NULL);
 
     memcpy(data, &s_NV[startOffset], size);
+    return TRUE;
 }
 
-//*** _plat__NvIsDifferent()
+//*** _plat__NvGetChangedStatus()
 // This function checks to see if the NV is different from the test value. This is
 // so that NV will not be written if it has not changed.
 // return value: int
-//  TRUE(1)    the NV location is different from the test value
-//  FALSE(0)   the NV location is the same as the test value
-LIB_EXPORT int
-_plat__NvIsDifferent(
-    unsigned int     startOffset,   // IN: read start
-    unsigned int     size,          // IN: size of bytes to read
-    void            *data           // IN: data buffer
+//      NV_HAS_CHANGED(1)       the NV location is different from the test value
+//      NV_IS_SAME(0)           the NV location is the same as the test value
+//      NV_INVALID_LOCATION(-1) the NV location is invalid; also triggers failure mode
+LIB_EXPORT int _plat__NvGetChangedStatus(
+    unsigned int startOffset,  // IN: read start
+    unsigned int size,         // IN: size of bytes to read
+    void*        data          // IN: data buffer
     )
 {
-    return (memcmp(&s_NV[startOffset], data, size) != 0);
+    assert(startOffset + size <= NV_MEMORY_SIZE);
+    if(startOffset + size <= NV_MEMORY_SIZE)
+    {
+        return (memcmp(&s_NV[startOffset], data, size) != 0);
+    }
+    // the NV location is invalid; the assert above should have triggered failure
+    // mode
+    return NV_INVALID_LOCATION;
 }
 
 static
@@ -584,7 +594,7 @@ _plat__NvMemoryWrite(
 //***_plat__NvMemoryClear()
 // Function is used to set a range of NV memory bytes to an implementation-dependent
 // value. The value represents the erase state of the memory.
-LIB_EXPORT void
+LIB_EXPORT int
 _plat__NvMemoryClear(
     unsigned int     start,         // IN: clear start
     unsigned int     size           // IN: number of bytes to clear
@@ -594,13 +604,14 @@ _plat__NvMemoryClear(
 
 	_plat__MarkDirtyBlocks(start, size);
     memset(&s_NV[start], 0, size);
+    return TRUE;
 }
 
 //***_plat__NvMemoryMove()
 // Function: Move a chunk of NV memory from source to destination
 //      This function should ensure that if there overlap, the original data is
 //      copied before it is written
-LIB_EXPORT void
+LIB_EXPORT int
 _plat__NvMemoryMove(
     unsigned int     sourceOffset,  // IN: source offset
     unsigned int     destOffset,    // IN: destination offset
@@ -615,6 +626,7 @@ _plat__NvMemoryMove(
 	_plat__MarkDirtyBlocks(destOffset, size);
 
     memmove(&s_NV[destOffset], &s_NV[sourceOffset], size);
+    return TRUE;
 }
 
 //***_plat__NvCommit()
@@ -654,4 +666,14 @@ _plat__ClearNvAvail(
 {
     // The anti-set; not on this platform.
     return;
+}
+
+//***_plat__TearDown
+// notify platform that TPM_TearDown was called so platform can cleanup or
+// zeroize anything in the Platform.  This should zeroize NV as well.
+LIB_EXPORT void _plat__TearDown()
+{
+#if FILE_BACKED_NV
+    // remove(s_NvFilePath);
+#endif
 }
