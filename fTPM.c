@@ -57,6 +57,11 @@ static bool fTPMSessionActive = false;
 bool fTPMInitialized = false;
 
 //
+// Track RPMB storage availability for graceful degradation
+//
+static bool fTPM_storage_available = true;
+
+//
 // Local (SW) command buffer
 //
 static uint8_t fTPMCommand[MAX_COMMAND_SIZE];
@@ -141,6 +146,7 @@ TEE_Result TA_CreateEntryPoint(void)
                                            0x00, 0x00, 0x01, 0x44, 0x00, 0x01 };
     uint32_t respLen;
     uint8_t *respBuf;
+    int nvResult;
 #ifdef MEASURED_BOOT
     unsigned char tpm_event_log_buf[EVENT_LOG_SIZE];
     size_t tpm_event_log_len = EVENT_LOG_SIZE;
@@ -164,8 +170,16 @@ TEE_Result TA_CreateEntryPoint(void)
     _admin__NvInitState();
 
     // If we fail to open fTPM storage we cannot continue.
-    if (_plat__NVEnable(NULL)) {
+    nvResult = _plat__NVEnable(NULL);
+    if (nvResult < 0) {
         TEE_Panic(TEE_ERROR_BAD_STATE);
+    }
+    else if (nvResult > 0) {
+        // RPMB not available, sessions will be rejected
+        fTPM_storage_available = false;
+    }
+    else {
+        fTPM_storage_available = true;
     }
 
 #ifdef fTPMDebug
@@ -284,6 +298,10 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t    param_types,
         return TEE_ERROR_BAD_PARAMETERS;
     }
 
+    // Reject sessions when storage is unavailable (RPMB not provisioned)
+    if (!fTPM_storage_available) {
+        return TEE_ERROR_STORAGE_NOT_AVAILABLE;
+    }
     // Only one active session to the fTPM is permitted
     if (fTPMSessionActive) {
         return TEE_ERROR_ACCESS_CONFLICT;

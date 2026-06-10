@@ -174,6 +174,17 @@ _plat__NvInitFromStorage()
 		// If the open failed, try to create this storage object.
 		if (Result != TEE_SUCCESS) {
 
+			// Check if storage backend is unavailable (or RPMB not provisioned).
+			// This is a recoverable condition - fTPM.c will decide whether to
+			// continue or panic based on its own logic.
+			if (Result == TEE_ERROR_STORAGE_NOT_AVAILABLE) {
+#ifdef fTPMDebug
+				IMSG("fTPM: storage not available");
+#endif
+				s_NVInitialized = FALSE;
+				return;
+			}
+
 			// There was an error, fail the init, NVEnable can retry.
 			if (Result != TEE_ERROR_ITEM_NOT_FOUND) {
 #ifdef fTPMDebug
