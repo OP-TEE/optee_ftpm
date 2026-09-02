@@ -7,10 +7,6 @@ jobs:
     name: make check (QEMUv8)
     runs-on: ubuntu-latest
     steps:
-      - name: Host cleanup
-        run: |
-          wget https://raw.githubusercontent.com/OP-TEE/optee_os/refs/heads/master/scripts/ci-host-cleanup.sh
-          bash ci-host-cleanup.sh
       - name: Checkout
         uses: actions/checkout@v4
       - name: Update Git config
