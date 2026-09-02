@@ -1,5 +1,9 @@
 name: CI
 on: [push, pull_request]
+concurrency:
+  group: ci-${{ github.ref }}  # unique per branch
+  # cancel previous runs on the same branch, except for master
+  cancel-in-progress: ${{ github.ref != 'master' }}
 permissions:
   contents: read # to fetch code (actions/checkout)
 jobs:
