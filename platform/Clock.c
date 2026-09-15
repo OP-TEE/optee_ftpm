@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/*
+ * Copyright (c) 2026, Siemens AG
+ */
 /* Microsoft Reference Implementation for TPM 2.0
  *
  *  The copyright in this software is being made available under the BSD License,
@@ -42,8 +46,9 @@
 
 //** Includes and Data Definitions
 #include "PlatformData.h"
-#include "Platform_fp.h"
-#include "TpmFail_fp.h"
+#include "platform_interface/tpm_to_platform_interface.h"
+#include "prototypes/platform_public_interface.h"
+#include "tpm_public/prototypes/TpmFail_fp.h"
 #include <assert.h>
 #include <tee_internal_api.h>
 
@@ -259,36 +264,31 @@ _plat__TimerWasStopped(
 
 //***_plat__ClockAdjustRate()
 // Adjust the clock rate
-LIB_EXPORT void
-_plat__ClockAdjustRate(
-    int              adjust         // IN: the adjust number.  It could be positive
-                                    //     or negative
-    )
+LIB_EXPORT void _plat__ClockRateAdjust(_plat__ClockAdjustStep adjust)
 {
     // We expect the caller should only use a fixed set of constant values to
     // adjust the rate
     switch(adjust)
     {
-        case CLOCK_ADJUST_COARSE:
+        // slower increases the divisor
+        case PLAT_TPM_CLOCK_ADJUST_COARSE_SLOWER:
             s_adjustRate += CLOCK_ADJUST_COARSE;
             break;
-        case -CLOCK_ADJUST_COARSE:
-            s_adjustRate -= CLOCK_ADJUST_COARSE;
-            break;
-        case CLOCK_ADJUST_MEDIUM:
+        case PLAT_TPM_CLOCK_ADJUST_MEDIUM_SLOWER:
             s_adjustRate += CLOCK_ADJUST_MEDIUM;
             break;
-        case -CLOCK_ADJUST_MEDIUM:
-            s_adjustRate -= CLOCK_ADJUST_MEDIUM;
-            break;
-        case CLOCK_ADJUST_FINE:
+        case PLAT_TPM_CLOCK_ADJUST_FINE_SLOWER:
             s_adjustRate += CLOCK_ADJUST_FINE;
             break;
-        case -CLOCK_ADJUST_FINE:
+        // faster decreases the divisor
+        case PLAT_TPM_CLOCK_ADJUST_FINE_FASTER:
             s_adjustRate -= CLOCK_ADJUST_FINE;
             break;
-        default:
-            // ignore any other values;
+        case PLAT_TPM_CLOCK_ADJUST_MEDIUM_FASTER:
+            s_adjustRate -= CLOCK_ADJUST_MEDIUM;
+            break;
+        case PLAT_TPM_CLOCK_ADJUST_COARSE_FASTER:
+            s_adjustRate -= CLOCK_ADJUST_COARSE;
             break;
     }
 

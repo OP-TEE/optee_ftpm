@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/*
+ * Copyright (c) 2026, Siemens AG
+ */
 /* Microsoft Reference Implementation for TPM 2.0
  *
  *  The copyright in this software is being made available under the BSD License,
@@ -35,8 +39,9 @@
 //** Includes and Function Prototypes
 
 #include    "PlatformData.h"
-#include    "Platform_fp.h"
-#include    "_TPM_Init_fp.h"
+#include    "platform_interface/tpm_to_platform_interface.h"
+#include    "prototypes/platform_public_interface.h"
+#include    "platform_interface/prototypes/_TPM_Init_fp.h"
 
 //** Functions
 
@@ -107,7 +112,7 @@ _plat__Signal_PowerOff(
     )
 {
     // Prepare NV memory for power off
-    _plat__NVDisable();
+    _plat__NVDisable(NULL, 0);
 
     return;
 }

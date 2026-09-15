@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/*
+ * Copyright (c) 2026, Siemens AG
+ */
 /* Microsoft Reference Implementation for TPM 2.0
  *
  *  The copyright in this software is being made available under the BSD License,
@@ -48,9 +52,10 @@
 
 //** Includes and locals
 #include "PlatformData.h"
-#include "Platform_fp.h"
+#include "platform_interface/tpm_to_platform_interface.h"
+#include "prototypes/platform_public_interface.h"
 #include <setjmp.h>
-#include "ExecCommand_fp.h"
+#include "platform_interface/prototypes/ExecCommand_fp.h"
 
 #include <tee_internal_api.h>
 #include <tee_internal_api_extensions.h>
@@ -76,16 +81,4 @@ _plat__RunCommand(
 {
     setjmp(s_jumpBuffer);
     ExecuteCommand(requestSize, request, responseSize, response);
-}
-
-
-//***_plat__Fail()
-// This is the platform depended failure exit for the TPM.
-LIB_EXPORT NORETURN void
-_plat__Fail(
-    void
-    )
-{
-    TEE_Panic(TEE_ERROR_BAD_STATE);
-    while (true); /* Not reached */
 }

@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/*
+ * Copyright (c) 2026, Siemens AG
+ */
 /* Microsoft Reference Implementation for TPM 2.0
  *
  *  The copyright in this software is being made available under the BSD License,
@@ -38,7 +42,8 @@
 //
 //** Includes, Typedefs, Structures, and Defines
 #include "PlatformData.h"
-#include "Platform_fp.h"
+#include "platform_interface/tpm_to_platform_interface.h"
+#include "prototypes/platform_public_interface.h"
 
 //** Functions
 

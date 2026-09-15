@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /*
  * Copyright (c) 2024, Linaro Limited
+ * Copyright (c) 2026, Siemens AG
  */
 
 /* Microsoft Reference Implementation for TPM 2.0
@@ -43,14 +44,8 @@
 #ifndef FTPM_H
 #define FTPM_H
 
-#include <TpmProfile.h>
+#include <TpmConfiguration/TpmProfile.h>
 #include <ftpm_ta.h>
-
-//
-// These must match values from reference/TPM/include/TpmProfile.h
-//
-#define  MAX_COMMAND_SIZE       4096
-#define  MAX_RESPONSE_SIZE      4096
 
 //
 // Macro for intentionally unreferenced parameters
@@ -85,11 +80,9 @@ extern void ExecuteCommand(
 //
 // External functions supporting TPM initialization
 //
-extern int  _plat__NVEnable(void *platParameter);
 extern int  TPM_Manufacture(bool firstTime);
 extern bool _plat__NvNeedsManufacture(void);
 extern void _TPM_Init(void);
-extern void _plat__NVDisable(void);
 extern void _admin__SaveChipFlags(void);
 
 //

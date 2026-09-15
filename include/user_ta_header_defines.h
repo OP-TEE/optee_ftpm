@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /*
  * Copyright (c) 2024, Linaro Limited
+ * Copyright (c) 2026, Siemens AG
  */
 
 /* Microsoft Reference Implementation for TPM 2.0
@@ -55,8 +56,8 @@
 				 TA_FLAG_INSTANCE_KEEP_ALIVE | \
 				 TA_FLAG_INSTANCE_KEEP_CRASHED | \
 				 TA_FLAG_DEVICE_ENUM_TEE_STORAGE_PRIVATE)
-#define TA_STACK_SIZE           (64 * 1024)
-#define TA_DATA_SIZE            (32 * 1024)
+#define TA_STACK_SIZE           (128 * 1024)
+#define TA_DATA_SIZE            (64 * 1024)
 
 #define TA_VERSION		"0.1"
 #define TA_DESCRIPTION		"fTPM TA"
