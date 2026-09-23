@@ -130,7 +130,7 @@ _plat__RealTime(
     }
     assert(Result == TEE_SUCCESS);
 
-    Elapsed = ((Time.seconds * 1000) + (Time.millis));
+    Elapsed = (((uint64_t)Time.seconds * 1000) + (Time.millis));
 
     return Elapsed;
 }
