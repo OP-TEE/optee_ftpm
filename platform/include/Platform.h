@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/*
+ * Copyright (c) 2026, Siemens AG
+ */
 /* Microsoft Reference Implementation for TPM 2.0
  *
  *  The copyright in this software is being made available under the BSD License,
@@ -36,17 +40,21 @@
 #ifndef    _PLATFORM_H_
 #define    _PLATFORM_H_
 
-#include "TpmBuildSwitches.h"
+#include "TpmConfiguration/TpmBuildSwitches.h"
 #include "BaseTypes.h"
 #include "TPMB.h"
 #include "MinMax.h"
 
-#include "TpmProfile.h"
+#include "TpmConfiguration/TpmProfile.h"
 
 #include "PlatformACT.h"
 #include "PlatformClock.h"
 #include "PlatformData.h"
-#include "Platform_fp.h"
+#include "prototypes/platform_public_interface.h"
+// TODO_RENAME_INC_FOLDER:platform_interface refers to the TPM_CoreLib platform interface
+//#include <platform_interface/tpm_to_platform_interface.h>
+//#include <platform_interface/platform_to_tpm_interface.h>
+#include "PlatformInternal.h"
 
 
 #endif  // _PLATFORM_H_

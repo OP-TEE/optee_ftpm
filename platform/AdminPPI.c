@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /*
  * Copyright (c) 2024, Linaro Limited
+ * Copyright (c) 2026, Siemens AG
  */
 /* Microsoft Reference Implementation for TPM 2.0
  *
@@ -240,7 +241,7 @@ _admin__PPIRequest(
 {
     TPM2_EmulatePPI_cmd_t cmd;
     TPM2_EmulatePPI_res_t rsp;
-    TPM2_EmulatePPI_res_t *rspPtr = &rsp;
+    UINT8 *rspPtr = (void *)&rsp;
     UINT32 rspLen = sizeof(TPM2_EmulatePPI_res_t);
     UINT8 *CmdBuffer;
 
@@ -272,7 +273,7 @@ _admin__PPIRequest(
     if (!_admin__PPICommand(sizeof(TPM2_EmulatePPI_cmd_t),
                             (UINT8 *)&cmd,
                             &rspLen,
-                            (UINT8**)&rspPtr)) {
+                            &rspPtr)) {
         return 0;
     }
 

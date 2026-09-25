@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/*
+ * Copyright (c) 2026, Siemens AG
+ */
 /* Microsoft Reference Implementation for TPM 2.0
  *
  *  The copyright in this software is being made available under the BSD License,
@@ -37,7 +41,7 @@
 // descriptions for these variables are in Global.h for this project.
 
 //** Includes
-#include    "TpmProfile.h"
+#include    "TpmConfiguration/TpmProfile.h"
 #include    "PlatformData.h"
 
 // From Cancel.c

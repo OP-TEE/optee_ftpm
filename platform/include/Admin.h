@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /*
  * Copyright (c) 2024, Linaro Limited
+ * Copyright (c) 2026, Siemens AG
  */
 /* Microsoft Reference Implementation for TPM 2.0
  *
@@ -48,12 +49,10 @@
 #define _ADMIN_H
 
 //**Includes
-#include <stdint.h>
+#include "Tpm.h"
 #include <trace.h>
-#include "swap.h"
-#include "TpmProfile.h"
+#include "TpmConfiguration/TpmProfile.h"
 #include "TpmSal.h"
-#include "TpmError.h"
 #include "GpMacros.h"
 
 // Parameter reference and types from ref impl headers

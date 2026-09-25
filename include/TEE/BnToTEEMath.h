@@ -51,22 +51,25 @@
  * are defined in TpmTypes.h
  */
 
-#ifndef MATH_LIB_DEFINED
-#define MATH_LIB_DEFINED
+#ifndef BN_MATH_LIB_DEFINED
+#define BN_MATH_LIB_DEFINED
 
-#define MATH_LIB_TEE
+#define BN_MATH_LIB_TEE
 
-typedef ECC_CURVE_DATA bnCurve_t;
+/*#define CRYPT_INT_BUF(buftypename, bits)    BN_STRUCT_DEF(buftypename, bits)
+#define CRYPT_POINT_BUF(buftypename, bits)  BN_POINT_BUF(buftypename, bits)
+#define CRYPT_CURVE_BUF(buftypename, bits)  TPMBN_ECC_CURVE_CONSTANTS*/
 
-typedef bnCurve_t* bigCurve;
+typedef struct crypto_impl_description
+{
+} _CRYPTO_IMPL_DESCRIPTION;
 
-#define SYMMETRIC_ALIGNMENT RADIX_BYTES
+typedef const TPMBN_ECC_CURVE_CONSTANTS*    bigCurveData;
 
-#define AccessCurveData(E) (E)
+TPM_INLINE const TPMBN_ECC_CURVE_CONSTANTS* AccessCurveConstants(
+    const bigCurveData* E)
+{
+    return *E;
+}
 
-#define CURVE_INITIALIZED(name, initializer) \
-	bnCurve_t* name = (ECC_CURVE_DATA*)GetCurveData(initializer)
-
-#define CURVE_FREE(E)
-
-#endif /*MATH_LIB_DEFINED*/
+#endif /*BN_MATH_LIB_DEFINED*/

@@ -6,12 +6,26 @@
  */
 
 #include "Tpm.h"
+#include "BnConvert_fp.h"
+#include "BnSupport_Interface.h"
 
-#ifdef MATH_LIB_TEE
+#ifdef BN_MATH_LIB_TEE
 
 #include <tee_internal_api.h>
 
 #include <stdio.h>
+
+/*
+ * This is a workaround for an incorrect definition of BN_WORD_INITIALIZED upstream in
+ * https://github.com/TrustedComputingGroup/TPM/blob/main/TPMCmd/tpm/cryptolibs/TpmBigNum/include/BnValues.h
+ * at tag V184.
+ */
+#undef BN_WORD_INITIALIZED
+#define BN_WORD_INITIALIZED(name, initial) \
+    BN_STRUCT(name, RADIX_BITS) name##_;         \
+    bigNum name = BnInitializeWord(        \
+        (bigNum) & name##_, BN_STRUCT_ALLOCATION(RADIX_BITS), initial)
+
 static void __maybe_unused printf_bigint(const TEE_BigInt *bigint)
 {
 	size_t buffer_len = 1024;
@@ -114,6 +128,37 @@ static size_t fmm_ctx_size_from_bn(bigConst bn)
 {
 	return TEE_BigIntFMMContextSizeInU32(bn_size_in_bits(bn));
 }
+
+
+#  if LIBRARY_COMPATIBILITY_CHECK
+/*
+ * This function is only used during development to make sure that the library
+ * that is being referenced is using the same size of data structures as the TPM.
+ */
+BOOL BnMathLibraryCompatibilityCheck(void)
+{
+    crypt_uword_t i;
+    BYTE test[] = {0x1F, 0x1E, 0x1D, 0x1C, 0x1B, 0x1A, 0x19, 0x18, 0x17, 0x16, 0x15,
+                   0x14, 0x13, 0x12, 0x11, 0x10, 0x0F, 0x0E, 0x0D, 0x0C, 0x0B, 0x0A,
+                   0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00};
+    BN_VAR(tpmTemp, sizeof(test) * 8);  // allocate some space for a test value
+                                        //
+    // Convert the test data to a bigNum
+    BnFromBytes(tpmTemp, test, sizeof(test));
+    // Convert the test data to a TEE_BigInt
+	TEE_BigInt teeTemp[bigint_len_from_bn(tpmTemp)];
+	BIGINT_INIT_FROM_BN(teeTemp, tpmTemp);
+    // Make sure the values are consistent
+	size_t test_out_size = sizeof(test);
+	BYTE test_out[test_out_size];
+	TEE_BigIntConvertToOctetString(test_out, &test_out_size, teeTemp);
+    for(i = 0; i < sizeof(test); i++)
+        GOTO_ERROR_UNLESS(test_out[i] == test[i]);
+    return 1;
+Error:
+    return 0;
+}
+#  endif
 
 LIB_EXPORT BOOL BnDiv(bigNum quotient, bigNum remainder, bigConst dividend,
 		      bigConst divisor)
@@ -606,11 +651,13 @@ static void jacobi_to_affine(TEE_BigInt *x3, TEE_BigInt *y3,
 	TEE_BigIntMulMod(y3, y1, pm2, p);
 }
 
-LIB_EXPORT BOOL BnEccModMult(bigPoint R, pointConst S, bigConst d, bigCurve E)
+LIB_EXPORT BOOL BnEccModMult(bigPoint R, pointConst S, bigConst d,
+			     const bigCurveData *E)
 {
-	const size_t prime_len = bigint_len_from_bn(E->prime);
-	TEE_BigInt tee_a[bigint_len_from_bn(E->a)];
-	BYTE buffer[bn_size_in_bytes(E->prime) + 1];
+	const size_t prime_len =
+		bigint_len_from_bn(AccessCurveConstants(E)->prime);
+	TEE_BigInt tee_a[bigint_len_from_bn(AccessCurveConstants(E)->a)];
+	BYTE buffer[bn_size_in_bytes(AccessCurveConstants(E)->prime) + 1];
 	TEE_BigInt tee_p[prime_len];
 	TEE_BigInt tee_x1[prime_len];
 	TEE_BigInt tee_y1[prime_len];
@@ -621,14 +668,14 @@ LIB_EXPORT BOOL BnEccModMult(bigPoint R, pointConst S, bigConst d, bigCurve E)
 	NUMBYTES size = 0;
 
 	if (!S)
-		S = CurveGetG(AccessCurveData(E));
+		S = BnCurveGetG(AccessCurveConstants(E));
 
 	BIGINT_INIT(tee_x3);
 	BIGINT_INIT(tee_y3);
 	BIGINT_INIT(tee_z3);
 
-	if (!BIGINT_INIT_FROM_BN(tee_p, E->prime) ||
-	    !BIGINT_INIT_FROM_BN(tee_a, E->a) ||
+	if (!BIGINT_INIT_FROM_BN(tee_p, AccessCurveConstants(E)->prime) ||
+	    !BIGINT_INIT_FROM_BN(tee_a, AccessCurveConstants(E)->a) ||
 	    !BIGINT_INIT_FROM_BN(tee_x1, S->x) ||
 	    !BIGINT_INIT_FROM_BN(tee_y1, S->y) ||
 	    !BIGINT_INIT_FROM_BN(tee_z1, S->z))
@@ -649,11 +696,11 @@ LIB_EXPORT BOOL BnEccModMult(bigPoint R, pointConst S, bigConst d, bigCurve E)
 }
 
 LIB_EXPORT BOOL BnEccModMult2(bigPoint R, pointConst S, bigConst d,
-			      pointConst Q, bigConst u, bigCurve E)
+			      pointConst Q, bigConst u, const bigCurveData *E)
 {
-	size_t prime_len = bigint_len_from_bn(E->prime);
-	size_t a_len = bigint_len_from_bn(E->a);
-	BYTE buffer[bn_size_in_bytes(E->prime) + 1];
+	size_t prime_len = bigint_len_from_bn(AccessCurveConstants(E)->prime);
+	size_t a_len = bigint_len_from_bn(AccessCurveConstants(E)->a);
+	BYTE buffer[bn_size_in_bytes(AccessCurveConstants(E)->prime) + 1];
 	TEE_BigInt tee_p[prime_len];
 	TEE_BigInt tee_x1[prime_len];
 	TEE_BigInt tee_y1[prime_len];
@@ -671,8 +718,8 @@ LIB_EXPORT BOOL BnEccModMult2(bigPoint R, pointConst S, bigConst d,
 	BIGINT_INIT(tee_x3);
 	BIGINT_INIT(tee_y3);
 	BIGINT_INIT(tee_z3);
-	if (!BIGINT_INIT_FROM_BN(tee_p, E->prime) ||
-	    !BIGINT_INIT_FROM_BN(tee_a, E->a) ||
+	if (!BIGINT_INIT_FROM_BN(tee_p, AccessCurveConstants(E)->prime) ||
+	    !BIGINT_INIT_FROM_BN(tee_a, AccessCurveConstants(E)->a) ||
 	    !BIGINT_INIT_FROM_BN(tee_x1, S->x) ||
 	    !BIGINT_INIT_FROM_BN(tee_y1, S->y) ||
 	    !BIGINT_INIT_FROM_BN(tee_z1, S->z) ||
@@ -704,5 +751,29 @@ LIB_EXPORT BOOL BnEccModMult2(bigPoint R, pointConst S, bigConst d,
 	    !BnFromBytes(R->z, &(const BYTE){1}, 1))
 		return FALSE;
 	return TRUE;
+}
+
+LIB_EXPORT BOOL BnEccAdd(bigPoint            R,  // OUT: computed point
+                         pointConst          S,  // IN: point to multiply by 'd'
+                         pointConst          Q,  // IN: second point
+                         const bigCurveData* E   // IN: curve
+)
+{
+	BN_WORD_INITIALIZED(one, 1);
+	return BnEccModMult2(R, S, one, Q, one, E);
+}
+
+LIB_EXPORT bigCurveData* BnCurveInitialize(
+    bigCurveData* E,       // IN: curve structure to initialize
+    TPM_ECC_CURVE curveId  // IN: curve identifier
+)
+{
+	*E = BnGetCurveData(curveId);
+	return E;
+}
+
+LIB_EXPORT void BnCurveFree(bigCurveData *E)
+{
+	(void)E;
 }
 #endif

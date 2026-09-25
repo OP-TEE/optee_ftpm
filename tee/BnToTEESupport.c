@@ -6,9 +6,9 @@
 
 #include "Tpm.h"
 
-#if defined(HASH_LIB_TEE) || defined(MATH_LIB_TEE) || defined(SYM_LIB_TEE)
+#if defined(BN_MATH_LIB_TEE)
 
-LIB_EXPORT int SupportLibInit(void)
+LIB_EXPORT int BnSupportLibInit(void)
 {
     return TRUE;
 }

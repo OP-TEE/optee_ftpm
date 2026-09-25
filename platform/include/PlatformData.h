@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/*
+ * Copyright (c) 2026, Siemens AG
+ */
 /* Microsoft Reference Implementation for TPM 2.0
  *
  *  The copyright in this software is being made available under the BSD License,
@@ -38,8 +42,8 @@
 #ifndef _PLATFORM_DATA_H_
 #define _PLATFORM_DATA_H_
 
-
-#include      "TpmProfile.h"
+#include      "Tpm.h"
+#include      "TpmConfiguration/TpmProfile.h"
 
 // From Cancel.c
 // Cancel flag.  It is initialized as FALSE, which indicate the command is not

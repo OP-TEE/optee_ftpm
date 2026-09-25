@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/*
+ * Copyright (c) 2026, Siemens AG
+ */
 /* Microsoft Reference Implementation for TPM 2.0
  *
  *  The copyright in this software is being made available under the BSD License,
@@ -33,7 +37,8 @@
  *  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 //** Includes
-#include "Platform.h"
+#include "Tpm.h"
+#include "PlatformACT.h"
 
 //** Global variables
 #define DEFINE_ACT(N)  ACT_DATA ACT_##N;
