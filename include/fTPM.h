@@ -88,6 +88,9 @@ extern void ExecuteCommand(
 extern int  _plat__NVEnable(void *platParameter);
 extern int  TPM_Manufacture(bool firstTime);
 extern bool _plat__NvNeedsManufacture(void);
+extern void _plat__NvSetVolatile(int volatileNv);
+extern int _plat__NvStorageReachable(void);
+extern void _plat__NvReset(void);
 extern void _TPM_Init(void);
 extern void _plat__NVDisable(void);
 extern void _admin__SaveChipFlags(void);

@@ -134,9 +134,179 @@ static TEE_Result get_tpm_event_log(unsigned char *buf, size_t *len)
 #endif // MEASURED_BOOT
 
 //
-// Called when TA instance is created. This is the first call to the TA.
+// Early mode: TPM use before secure storage is reachable.
 //
-TEE_Result TA_CreateEntryPoint(void)
+// The fTPM keeps its NV state in OP-TEE secure storage. With REE FS that
+// storage is served by tee-supplicant, which does not exist before the OS
+// runs, so a boot loader (e.g. U-Boot's tpm2_ftpm_tee driver measuring the
+// kernel) cannot use the fTPM at all: every session used to be refused.
+//
+// Instead, when storage does not answer, the fTPM now starts on a temporary,
+// volatile TPM state (manufactured in memory, never written back) and serves
+// only commands that need no NV: PCR extend/read, capabilities, random
+// numbers, self test. Every successful PCR_Extend/PCR_Event is recorded in a
+// journal. At every session open and command the fTPM checks whether storage
+// answers now; once it does, the volatile state is dropped, the real NV state
+// is loaded, the TPM is started (exactly as at a normal first open) and the
+// journal is replayed, so the PCRs hold the measurements taken before
+// storage was available, followed by everything after. Commands that need NV
+// get TPM_RC_NV_UNAVAILABLE while in early mode.
+//
+#define TPM_ST_NO_SESSIONS          0x8001
+#define TPM_ST_SESSIONS             0x8002
+#define TPM_RS_PW                   0x40000009
+#define TPM_RC_MEMORY_W             ((TPM_RC)0x904)
+#define TPM_RC_NV_UNAVAILABLE_W     ((TPM_RC)0x923)
+
+#define TPM_CC_IncrementalSelfTest  0x00000142
+#define TPM_CC_SelfTest             0x00000143
+#define TPM_CC_Startup              0x00000144
+#define TPM_CC_PCR_Event            0x0000013C
+#define TPM_CC_GetCapability        0x0000017A
+#define TPM_CC_GetRandom            0x0000017B
+#define TPM_CC_GetTestResult        0x0000017C
+#define TPM_CC_Hash                 0x0000017D
+#define TPM_CC_PCR_Read             0x0000017E
+#define TPM_CC_ReadClock            0x00000181
+#define TPM_CC_PCR_Extend           0x00000182
+
+static bool fTPM_early = false;
+static uint8_t fTPM_journal[CFG_FTPM_EARLY_JOURNAL_SIZE];
+static uint32_t fTPM_journal_len = 0;
+static uint8_t fTPM_replay_response[MAX_RESPONSE_SIZE];
+
+static uint32_t fTPM_be32(const uint8_t *p)
+{
+    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
+           ((uint32_t)p[2] << 8) | (uint32_t)p[3];
+}
+
+static uint16_t fTPM_be16(const uint8_t *p)
+{
+    return (uint16_t)(((uint16_t)p[0] << 8) | p[1]);
+}
+
+static bool fTPM_early_allowed(uint32_t cc)
+{
+    switch (cc) {
+    case TPM_CC_IncrementalSelfTest:
+    case TPM_CC_SelfTest:
+    case TPM_CC_Startup:
+    case TPM_CC_PCR_Event:
+    case TPM_CC_GetCapability:
+    case TPM_CC_GetRandom:
+    case TPM_CC_GetTestResult:
+    case TPM_CC_Hash:
+    case TPM_CC_PCR_Read:
+    case TPM_CC_ReadClock:
+    case TPM_CC_PCR_Extend:
+        return true;
+    default:
+        return false;
+    }
+}
+
+//
+// A PCR_Extend/PCR_Event can only be replayed later if it carries exactly one
+// plain password session (the PCR auth value cannot be changed in early mode).
+//
+static bool fTPM_journal_ok(const uint8_t *cmd, uint32_t len)
+{
+    uint32_t authSize;
+
+    if (len < 27 || fTPM_be16(cmd) != TPM_ST_SESSIONS)
+        return false;
+    authSize = fTPM_be32(cmd + 14);
+    return fTPM_be32(cmd + 18) == TPM_RS_PW &&
+           fTPM_be16(cmd + 22) == 0 &&
+           authSize == 9 + (uint32_t)fTPM_be16(cmd + 25) &&
+           18 + authSize <= len;
+}
+
+static void fTPM_rc_response(TPM_RC rc, uint32_t *respLen, uint8_t *respBuf)
+{
+    static const uint8_t hdr[6] = { 0x80, 0x01, 0x00, 0x00, 0x00, 0x0A };
+
+    memcpy(respBuf, hdr, sizeof(hdr));
+    respBuf[6] = (uint8_t)(rc >> 24);
+    respBuf[7] = (uint8_t)(rc >> 16);
+    respBuf[8] = (uint8_t)(rc >> 8);
+    respBuf[9] = (uint8_t)rc;
+    *respLen = 10;
+}
+
+//
+// Execute one command in early mode; respBuf/respLen as for ExecuteCommand().
+//
+static void fTPM_early_execute(uint32_t cmdLen, uint8_t *cmdBuf,
+                               uint32_t *respLen, uint8_t **respBuf)
+{
+    uint32_t cc = fTPM_be32(cmdBuf + 6);
+    bool journal = (cc == TPM_CC_PCR_Extend || cc == TPM_CC_PCR_Event);
+
+    if (*respLen < 10) {
+        *respLen = 10;
+        return;
+    }
+    if (!fTPM_early_allowed(cc) ||
+        (journal && !fTPM_journal_ok(cmdBuf, cmdLen))) {
+        fTPM_rc_response(TPM_RC_NV_UNAVAILABLE_W, respLen, *respBuf);
+        return;
+    }
+    if (journal && fTPM_journal_len + 4 + cmdLen > sizeof(fTPM_journal)) {
+        EMSG("fTPM: early mode journal full, PCR extend refused");
+        fTPM_rc_response(TPM_RC_MEMORY_W, respLen, *respBuf);
+        return;
+    }
+
+    ExecuteCommand(cmdLen, cmdBuf, respLen, respBuf);
+
+    if (journal && fTPMResponseCode(*respLen, *respBuf) == TPM_RC_SUCCESS) {
+        uint8_t *p = fTPM_journal + fTPM_journal_len;
+
+        p[0] = (uint8_t)(cmdLen >> 24);
+        p[1] = (uint8_t)(cmdLen >> 16);
+        p[2] = (uint8_t)(cmdLen >> 8);
+        p[3] = (uint8_t)cmdLen;
+        memcpy(p + 4, cmdBuf, cmdLen);
+        fTPM_journal_len += 4 + cmdLen;
+    }
+}
+
+//
+// Replay the early mode journal on the real TPM state. A replay that fails
+// would leave PCRs that do not match what the boot loader measured: fail
+// closed (the TA stays crashed until the next boot).
+//
+static void fTPM_replay_journal(void)
+{
+    uint32_t off = 0;
+    uint32_t n = 0;
+
+    while (off + 4 <= fTPM_journal_len) {
+        uint32_t len = fTPM_be32(fTPM_journal + off);
+        uint32_t respLen = sizeof(fTPM_replay_response);
+        uint8_t *respBuf = fTPM_replay_response;
+
+        memcpy(fTPMCommand, fTPM_journal + off + 4, len);
+        ExecuteCommand(len, fTPMCommand, &respLen, &respBuf);
+        if (fTPMResponseCode(respLen, respBuf) != TPM_RC_SUCCESS) {
+            EMSG("fTPM: replay of early PCR extend %u failed", n);
+            TEE_Panic(TEE_ERROR_BAD_STATE);
+        }
+        off += 4 + len;
+        n++;
+    }
+    IMSG("fTPM: replayed %u early PCR extends", n);
+    fTPM_journal_len = 0;
+    memset(fTPM_journal, 0, sizeof(fTPM_journal));
+}
+
+//
+// Power up the TPM: load NV (or fall back to a volatile state in early
+// mode), manufacture if needed, _TPM_Init and Startup.
+//
+static void fTPM_power_up(void)
 {
     #define STARTUP_SIZE 0x0C
 
@@ -152,20 +322,6 @@ TEE_Result TA_CreateEntryPoint(void)
     size_t tpm_event_log_len = EVENT_LOG_SIZE;
 #endif
 
-#ifdef fTPMDebug
-    DMSG("Entry Point\n");
-#endif
-
-    // If we've been here before, don't init again.
-    if (fTPMInitialized) {
-        // We may have had TA_DestroyEntryPoint called but we didn't
-        // actually get torn down. Re-NVEnable, just in case.
-        if (_plat__NVEnable(NULL)) {
-            TEE_Panic(TEE_ERROR_BAD_STATE);
-        }
-        return TEE_SUCCESS;
-    }
-
     // Initialize NV admin state
     _admin__NvInitState();
 
@@ -175,11 +331,16 @@ TEE_Result TA_CreateEntryPoint(void)
         TEE_Panic(TEE_ERROR_BAD_STATE);
     }
     else if (nvResult > 0) {
-        // RPMB not available, sessions will be rejected
+        // Storage not reachable (yet): early mode on a volatile state
         fTPM_storage_available = false;
+        fTPM_early = true;
+        _plat__NvSetVolatile(1);
+        IMSG("fTPM: no secure storage: early mode (PCR use only)");
+        TPM_Manufacture(1);
     }
     else {
         fTPM_storage_available = true;
+        fTPM_early = false;
     }
 
 #ifdef fTPMDebug
@@ -188,7 +349,7 @@ TEE_Result TA_CreateEntryPoint(void)
 
     // This only occurs when there is no previous NV state, i.e., on first
     // boot, after recovering from data loss, we reset the platform, etc.
-    if (_plat__NvNeedsManufacture()) {
+    if (!fTPM_early && _plat__NvNeedsManufacture()) {
 #ifdef fTPMDebug
         DMSG("TPM_Manufacture\n");
 #endif
@@ -261,6 +422,47 @@ Exit:
 
     }
 #endif
+}
+
+//
+// Leave early mode once secure storage answers.
+//
+static void fTPM_try_leave_early_mode(void)
+{
+    if (!fTPM_early || !_plat__NvStorageReachable())
+        return;
+
+    IMSG("fTPM: secure storage available: loading the TPM state");
+    _plat__NvReset();
+    fTPM_power_up();
+    if (fTPM_early) {
+        // Storage went away again between the check and the load
+        EMSG("fTPM: secure storage lost while leaving early mode");
+        TEE_Panic(TEE_ERROR_BAD_STATE);
+    }
+    fTPM_replay_journal();
+}
+
+//
+// Called when TA instance is created. This is the first call to the TA.
+//
+TEE_Result TA_CreateEntryPoint(void)
+{
+#ifdef fTPMDebug
+    DMSG("Entry Point\n");
+#endif
+
+    // If we've been here before, don't init again.
+    if (fTPMInitialized) {
+        // We may have had TA_DestroyEntryPoint called but we didn't
+        // actually get torn down. Re-NVEnable, just in case.
+        if (_plat__NVEnable(NULL)) {
+            TEE_Panic(TEE_ERROR_BAD_STATE);
+        }
+        return TEE_SUCCESS;
+    }
+
+    fTPM_power_up();
 
     return TEE_SUCCESS;
 }
@@ -298,8 +500,12 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t    param_types,
         return TEE_ERROR_BAD_PARAMETERS;
     }
 
-    // Reject sessions when storage is unavailable (RPMB not provisioned)
-    if (!fTPM_storage_available) {
+    // Storage may have become available since the last session (e.g. the
+    // OS started its storage service after the boot loader used the TPM)
+    fTPM_try_leave_early_mode();
+
+    // Reject sessions when storage is unavailable and not in early mode
+    if (!fTPM_storage_available && !fTPM_early) {
         return TEE_ERROR_STORAGE_NOT_AVAILABLE;
     }
     // Only one active session to the fTPM is permitted
@@ -378,8 +584,14 @@ static TEE_Result fTPM_Submit_Command(uint32_t  param_types,
     respBuf = (uint8_t *)(params[1].memref.buffer);
     respLen = params[1].memref.size;
 
+    fTPM_try_leave_early_mode();
+
+    // Early mode: only commands that need no NV
+    if (fTPM_early) {
+        fTPM_early_execute(cmdLen, cmdBuf, &respLen, &respBuf);
+    }
     // Check if this is a PPI Command
-    if (!_admin__PPICommand(cmdLen, cmdBuf, &respLen, &respBuf)) {
+    else if (!_admin__PPICommand(cmdLen, cmdBuf, &respLen, &respBuf)) {
         // If not, pass through to TPM
         ExecuteCommand(cmdLen, cmdBuf, &respLen, &respBuf);
     }
@@ -433,6 +645,12 @@ static TEE_Result fTPM_Emulate_PPI(uint32_t  param_types,
         IMSG("Bad param size(s)\n");
 #endif
         return TEE_ERROR_BAD_PARAMETERS;
+    }
+
+    // PPI requests change NV: not possible before storage is available
+    fTPM_try_leave_early_mode();
+    if (fTPM_early) {
+        return TEE_ERROR_STORAGE_NOT_AVAILABLE;
     }
 
     // Copy command locally

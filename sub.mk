@@ -1,5 +1,6 @@
 CFG_FTPM_EMULATE_PPI ?= n
 CFG_FTPM_TA_TEE_STORAGE_ID ?= TEE_STORAGE_PRIVATE
+CFG_FTPM_EARLY_JOURNAL_SIZE ?= 16384
 
 #
 # The fTPM needs to overwrite some of the header files used in the
@@ -80,6 +81,7 @@ cflags-platform/EventLogPrint.c-y += -Wno-format-truncation
 cflags-platform/EventLogPrint.c-y += -Wno-restrict
 
 cppflags-y += -DCFG_FTPM_TA_TEE_STORAGE_ID=$(CFG_FTPM_TA_TEE_STORAGE_ID)
+cppflags-y += -DCFG_FTPM_EARLY_JOURNAL_SIZE=$(CFG_FTPM_EARLY_JOURNAL_SIZE)
 
 srcs-y += platform/AdminPPI.c
 srcs-y += platform/Cancel.c

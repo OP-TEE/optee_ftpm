@@ -98,6 +98,14 @@ static UINT64 s_blockMap = 0x0ULL;
 static BOOL s_NVWritePending = FALSE;
 
 //
+// Volatile NV: set while the secure storage backend is not reachable yet
+// (e.g. in the boot loader, before the normal world storage service runs).
+// NV changes then stay in s_NV and are never written back; the state is
+// discarded once storage becomes reachable (see fTPM.c).
+//
+static BOOL s_NVVolatile = FALSE;
+
+//
 // Shortcut for 'dirty'ing all NV blocks. Note the type.
 //
 #if NV_BLOCK_COUNT < 64
@@ -309,6 +317,12 @@ _plat__NvWriteBack()
 	UINT32 objID;
 	TEE_Result Result;
 
+	// Nothing is written back while NV is volatile.
+	if (s_NVVolatile) {
+		s_blockMap = 0;
+		return;
+	}
+
 	// Exit if no dirty blocks.
 	if ((!s_blockMap) || (!s_NVInitialized)) {
 		s_NVWritePending = FALSE;
@@ -502,6 +516,19 @@ _plat__NVDisable(
     return;
 }
 
+//***_plat__NvSetVolatile()
+// Keep NV changes in memory only (TRUE) or write them back (FALSE).
+void
+_plat__NvSetVolatile(
+    int volatileNv
+    )
+{
+    s_NVVolatile = volatileNv;
+    if (volatileNv) {
+        s_blockMap = 0;
+    }
+}
+
 //***_plat__NvStorageReachable()
 // Check, without touching the NV image in memory, whether the secure storage
 // backend answers. "Storage not available" and a failed request to the normal
@@ -510,7 +537,7 @@ _plat__NVDisable(
 // return type: BOOL
 //      TRUE        storage answered
 //      FALSE       storage not reachable
-static int
+int
 _plat__NvStorageReachable(
     void
     )
@@ -533,6 +560,29 @@ _plat__NvStorageReachable(
              res == TEE_ERROR_STORAGE_NOT_AVAILABLE_2 ||
              res == TEE_ERROR_COMMUNICATION ||
              res == TEE_ERROR_OUT_OF_MEMORY);
+}
+
+//***_plat__NvReset()
+// Drop the NV image in memory (no write back) so that the next
+// _plat__NVEnable() reads it from storage again.
+void
+_plat__NvReset(
+    void
+    )
+{
+    UINT32 i;
+
+    for (i = 0; i < NV_BLOCK_COUNT; i++) {
+        if (IS_VALID(s_NVStore[i])) {
+            TEE_CloseObject(s_NVStore[i]);
+            s_NVStore[i] = TEE_HANDLE_NULL;
+        }
+    }
+    s_blockMap = 0;
+    s_NVWritePending = FALSE;
+    s_NVVolatile = FALSE;
+    s_NVChipFileNeedsManufacture = FALSE;
+    s_NVInitialized = FALSE;
 }
 
 //***_plat__IsNvAvailable()
