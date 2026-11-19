@@ -48,6 +48,7 @@
 
 #include <tee_internal_api.h>
 #include <tee_internal_api_extensions.h>
+#include <utee_syscalls.h>
 
 //
 // Overall size of NV, not just the TPM's NV storage
@@ -89,6 +90,12 @@ static TEE_ObjectHandle s_NVStore[NV_BLOCK_COUNT] = { TEE_HANDLE_NULL };
 // Bitmap for NV blocks. Moving from UINT64 requires change to NV_DIRTY_ALL.
 //
 static UINT64 s_blockMap = 0x0ULL;
+
+//
+// A write back failed (storage briefly gone, e.g. tee-supplicant restarting):
+// the dirty blocks are kept and written before the next command.
+//
+static BOOL s_NVWritePending = FALSE;
 
 //
 // Shortcut for 'dirty'ing all NV blocks. Note the type.
@@ -304,6 +311,7 @@ _plat__NvWriteBack()
 
 	// Exit if no dirty blocks.
 	if ((!s_blockMap) || (!s_NVInitialized)) {
+		s_NVWritePending = FALSE;
 		return;
 	}
 
@@ -349,14 +357,13 @@ _plat__NvWriteBack()
         }
     }
 
+    s_NVWritePending = FALSE;
     return;
 
 Error:
-	// Error path.
-#ifdef fTPMDebug
-	DMSG("NV write back failed");
-#endif
-	s_NVInitialized = FALSE;
+	// Keep the dirty blocks; _plat__IsNvAvailable() retries them.
+	DMSG("NV write back failed: 0x%x", Result);
+	s_NVWritePending = TRUE;
 	for (i = 0; i < NV_BLOCK_COUNT; i++) {
 		if (IS_VALID(s_NVStore[i])) {
 			TEE_CloseObject(s_NVStore[i]);
@@ -495,6 +502,39 @@ _plat__NVDisable(
     return;
 }
 
+//***_plat__NvStorageReachable()
+// Check, without touching the NV image in memory, whether the secure storage
+// backend answers. "Storage not available" and a failed request to the normal
+// world (no storage service: communication error or no RPC buffer) count as
+// not reachable.
+// return type: BOOL
+//      TRUE        storage answered
+//      FALSE       storage not reachable
+static int
+_plat__NvStorageReachable(
+    void
+    )
+{
+    UINT32 objID = s_StorageObjectID;
+    uint32_t obj = 0;
+    TEE_Result res;
+
+    // The raw system call: TEE_OpenPersistentObject() panics the TA on
+    // TEE_ERROR_COMMUNICATION.
+    res = _utee_storage_obj_open(CFG_FTPM_TA_TEE_STORAGE_ID,
+                                 (void *)&objID, sizeof(objID),
+                                 TEE_DATA_FLAG_ACCESS_READ |
+                                 TEE_DATA_FLAG_SHARE_READ, &obj);
+    if (res == TEE_SUCCESS) {
+        _utee_cryp_obj_close(obj);
+    }
+
+    return !(res == TEE_ERROR_STORAGE_NOT_AVAILABLE ||
+             res == TEE_ERROR_STORAGE_NOT_AVAILABLE_2 ||
+             res == TEE_ERROR_COMMUNICATION ||
+             res == TEE_ERROR_OUT_OF_MEMORY);
+}
+
 //***_plat__IsNvAvailable()
 // Check if NV is available
 // return type: int
@@ -506,7 +546,13 @@ _plat__IsNvAvailable(
     void
     )
 {
-    // This is not enabled for OpTEE TA. Storage is always available.
+    // Called before each command: write what a failed write back left.
+    if (s_NVWritePending) {
+        if (_plat__NvStorageReachable())
+            _plat__NvWriteBack();
+        if (s_NVWritePending)
+            return 1;
+    }
     return 0;
 }
 
